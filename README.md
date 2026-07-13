@@ -1,15 +1,15 @@
 # PO Guard
 
-PO Guard is a small, deployable purchase-order intake workflow for logistics teams. It accepts pasted PO/email text or a PDF/TXT/EML upload, uses Claude to extract structured line items, verifies them against a supplier catalog, flags discrepancies, and produces a clean confirmation draft.
+PO Guard is a small, deployable purchase-order intake workflow for logistics teams. It accepts pasted PO/email text or a PDF/CSV/TXT/EML upload, uses OpenAI to extract structured line items, verifies them against a supplier catalog, flags discrepancies, and produces a clean confirmation draft.
 
-The core design rule is **LLM extracts; code decides**. Claude handles messy, semi-structured documents. Prices, totals, acceptance status, and discrepancy rules are deterministic TypeScript.
+The core design rule is **LLM extracts; code decides**. OpenAI handles messy, semi-structured documents. Prices, totals, acceptance status, and discrepancy rules are deterministic TypeScript.
 
 ## What it does
 
 - Accepts pasted text, email content, PDF, CSV, TXT, or EML files (up to 10 MB).
-- Lets a reviewer import a CSV/JSON supplier catalog directly, or use Claude to extract an irregular catalog from PDF, image, text, CSV, or JSON.
+- Lets a reviewer import a CSV/JSON supplier catalog directly, or use OpenAI to extract an irregular catalog from PDF, image, text, CSV, or JSON.
 - Keeps extracted catalog rows editable before they are used for comparison.
-- Extracts PO metadata and line items with Anthropic tool use and a forced JSON schema.
+- Extracts PO metadata and line items with the OpenAI Responses API and strict Structured Outputs.
 - Validates the model response with Zod before using it.
 - Checks SKU, quantity, unit price, line totals, and stated PO total against a small supplier catalog.
 - Supports orders in a different currency from the catalog and converts order prices before comparison.
@@ -23,7 +23,7 @@ apps/web (React + Vite)
         │ multipart/form-data
         ▼
 apps/api (Express)
-        ├── Anthropic extractor ──► structured PO validated with Zod
+        ├── OpenAI extractor ──► structured PO validated with Zod
         ├── deterministic verifier ──► supplier catalog + discrepancy rules
         └── serves the built frontend in production
 
@@ -35,11 +35,13 @@ This is an npm-workspaces monorepo. Render builds one Docker image and runs one 
 
 ## Run locally
 
-Requirements: Node.js 22+ and an Anthropic API key.
+Requirements: Node.js 22+ and an OpenAI API key.
+
+Create the key at <https://platform.openai.com/api-keys>. API billing is separate from a ChatGPT Plus/Pro subscription, so configure API billing at <https://platform.openai.com/settings/organization/billing/overview> if the project has no credits. Copy the secret when it is created; OpenAI does not show the full value again.
 
 ```bash
 cp .env.example .env
-# Add ANTHROPIC_API_KEY to .env
+# Add OPENAI_API_KEY to .env
 npm install
 npm run dev
 ```
@@ -83,16 +85,16 @@ When the order currency differs from the catalog currency, the API retrieves a d
 
 1. Push this repository to GitHub.
 2. In Render, create a **Blueprint** and select the repository. Render reads `render.yaml` and the root `Dockerfile`.
-3. Set the secret `ANTHROPIC_API_KEY` when prompted.
+3. Set the secret `OPENAI_API_KEY` when prompted.
 4. Deploy. The health check is `/api/health`.
 
-`ANTHROPIC_MODEL` defaults to `claude-sonnet-4-6` and can be changed in Render without a code change.
+`OPENAI_MODEL` defaults to `gpt-5.4-mini` and can be changed in Render without a code change.
 
 ## Key decisions and tradeoffs
 
-- **Tool use instead of free-form JSON.** The model is forced to call one extraction tool whose input has a JSON schema. Zod then validates the result. This costs a little prompt/schema space but substantially reduces malformed responses.
-- **Claude receives PDFs directly.** This preserves tables and layout without adding OCR/PDF parsing infrastructure. The tradeoff is provider coupling for PDF intake.
-- **Catalog extraction is review-first.** Claude can turn an irregular price list or image into editable rows, but the user must save that catalog before it becomes the deterministic comparison source.
+- **Structured Outputs instead of free-form JSON.** The Responses API is given a strict schema generated from Zod and the parsed output is validated again before use. This costs a little schema space but substantially reduces malformed responses.
+- **OpenAI receives PDFs and images directly.** This preserves tables and layout without adding OCR/PDF parsing infrastructure. The tradeoff is provider coupling for document intake.
+- **Catalog extraction is review-first.** OpenAI can turn an irregular price list or image into editable rows, but the user must save that catalog before it becomes the deterministic comparison source.
 - **Deterministic verification.** The model never sees the approved catalog and cannot approve an order. Business rules are testable, explainable, and safe to change independently.
 - **Currency conversion before comparison.** PO amounts remain in their source currency for auditability. A daily reference rate creates separate catalog-currency values; only those converted values are compared with catalog prices. Reference rates are suitable for this prototype, not settlement or accounting.
 - **No database.** The weekend scope is intake and verification, not order lifecycle management. Results are intentionally ephemeral; production would store an audit record and document hash.

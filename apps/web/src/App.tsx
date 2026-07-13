@@ -41,6 +41,8 @@ const money = (value: number | null, currency = 'USD') => value === null
   ? '—'
   : new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 
+const formatModelName = (model: string) => model.replace(/^gpt-/i, 'GPT ');
+
 export function App() {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -329,7 +331,7 @@ function CatalogEditor({
       const warningText = payload.warnings?.length
         ? ` Review ${payload.warnings.length} extraction warning${payload.warnings.length === 1 ? '' : 's'} before saving.`
         : '';
-      setEditorNotice(`Extracted ${parsed.items.length} SKU${parsed.items.length === 1 ? '' : 's'} with ${payload.modelUsed?.replace('claude-', 'Claude ') ?? 'Claude'}.${warningText}`);
+      setEditorNotice(`Extracted ${parsed.items.length} SKU${parsed.items.length === 1 ? '' : 's'} with ${payload.modelUsed ? formatModelName(payload.modelUsed) : 'OpenAI'}.${warningText}`);
     } catch (cause) {
       setEditorError(cause instanceof Error ? cause.message : 'The AI could not extract this catalog.');
     } finally {
@@ -461,7 +463,7 @@ function Results({ result, onReset }: { result: AnalysisResponse; onReset: () =>
       <div className={`result-hero ${isConfirmed ? 'success' : 'warning'}`}>
         <div className="result-icon">{isConfirmed ? <CheckCircle2 size={25} /> : <CircleAlert size={25} />}</div>
         <div><span className="result-kicker">Analysis complete</span><h1>{isConfirmed ? 'Ready to confirm' : 'Review required'}</h1><p>{result.confirmation}</p></div>
-        <div className="model-badge">Processed by {result.modelUsed.replace('claude-', 'Claude ')}</div>
+        <div className="model-badge">Processed by {formatModelName(result.modelUsed)}</div>
       </div>
 
       {converted && (

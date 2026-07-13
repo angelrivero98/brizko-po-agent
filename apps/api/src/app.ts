@@ -7,8 +7,8 @@ import { ZodError } from 'zod';
 import { supplierCatalogSchema } from '@po/shared';
 import { catalog, supplier } from './domain/catalog.js';
 import { verifyPurchaseOrder } from './domain/verify-purchase-order.js';
-import { AnthropicCatalogExtractor, type CatalogSource } from './services/anthropic-catalog-extractor.js';
-import { AnthropicExtractor } from './services/anthropic-extractor.js';
+import { OpenAICatalogExtractor, type CatalogSource } from './services/openai-catalog-extractor.js';
+import { OpenAIExtractor } from './services/openai-extractor.js';
 import { getCurrencyConversion } from './services/exchange-rate.service.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -21,7 +21,7 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, aiConfigured: Boolean(process.env.ANTHROPIC_API_KEY) });
+    res.json({ ok: true, aiConfigured: Boolean(process.env.OPENAI_API_KEY) });
   });
 
   app.get('/api/catalog', (_req, res) => {
@@ -56,7 +56,7 @@ export function createApp() {
         return;
       }
 
-      const extractor = new AnthropicCatalogExtractor();
+      const extractor = new OpenAICatalogExtractor();
       res.json(await extractor.extract(source));
     } catch (error) {
       next(error);
@@ -104,7 +104,7 @@ export function createApp() {
         source = { kind: 'text', text: pastedText };
       }
 
-      const extractor = new AnthropicExtractor();
+      const extractor = new OpenAIExtractor();
       const { purchaseOrder, modelUsed } = await extractor.extract(source);
       const activeCatalog = customCatalog?.items ?? catalog;
       const catalogCurrency = customCatalog?.currency ?? supplier.currency;
@@ -137,7 +137,7 @@ export function createApp() {
       return;
     }
     const message = error instanceof Error ? error.message : 'Unexpected error.';
-    const status = message.includes('ANTHROPIC_API_KEY') ? 503 : message.startsWith('Currency conversion') ? 422 : 500;
+    const status = message.includes('OPENAI_API_KEY') ? 503 : message.startsWith('Currency conversion') ? 422 : 500;
     res.status(status).json({ error: status === 503 ? 'AI analysis is not configured on this deployment.' : message });
   };
   app.use(errorHandler);

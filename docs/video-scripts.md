@@ -10,7 +10,7 @@
 
 Show the repository folders or the README architecture section.
 
-“The app is a TypeScript monorepo: React and Vite on the frontend, Express on the backend, and a shared schema package. Claude extracts the messy document into structured data through a forced tool call. Zod validates it, then regular TypeScript checks the catalog. The important boundary is: AI extracts; code decides.”
+“The app is a TypeScript monorepo: React and Vite on the frontend, Express on the backend, and a shared schema package. OpenAI extracts the messy document into structured data through the Responses API and Structured Outputs. Zod validates it, then regular TypeScript checks the catalog. The important boundary is: AI extracts; code decides.”
 
 **0:55–2:15 — Discrepancy path**
 

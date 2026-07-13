@@ -6,9 +6,9 @@ services:
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
-      - key: ANTHROPIC_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
-      - key: ANTHROPIC_MODEL
-        value: claude-sonnet-4-6
+      - key: OPENAI_MODEL
+        value: gpt-5.4-mini
       - key: NODE_ENV
         value: production

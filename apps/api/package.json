@@ -11,12 +11,12 @@
     "test": "node --import tsx --test test/**/*.test.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.91.1",
     "@po/shared": "1.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "multer": "^2.0.2",
+    "openai": "^6.46.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -24,8 +24,8 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.10.1",
-    "supertest": "^7.2.2",
     "@types/supertest": "^6.0.3",
+    "supertest": "^7.2.2",
     "tsx": "^4.23.0"
   }
 }
