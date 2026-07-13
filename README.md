@@ -16,6 +16,7 @@ The core design rule is **LLM extracts; code decides**. OpenAI handles messy, se
 - Supports orders in a different currency from the catalog and converts order prices before comparison.
 - Shows a review-ready result and generates a copyable confirmation.
 - Generates a downloadable PDF verification record with the status badge, analysis reference, catalog, order metadata, line-item checks, totals, currency conversion, model, and confirmation text.
+- Provides a responsive mobile workflow: touch-sized controls, safe-area support, stacked catalog editing, compact batch navigation, and card-based line-item verification without horizontal scrolling.
 - Does not store uploaded documents or place orders automatically.
 
 ## Architecture

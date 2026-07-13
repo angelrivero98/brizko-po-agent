@@ -202,7 +202,7 @@ export function App() {
           <span className="brand-mark"><PackageCheck size={19} strokeWidth={2.4} /></span>
           <span>PO Guard</span>
         </a>
-        <button className="environment" onClick={loadCatalog}><span /> {catalog ? `${catalog.supplier.name} · ${catalog.items.length} SKUs` : 'Loading catalog…'} <Pencil size={12} /></button>
+        <button className="environment" aria-label="Edit active supplier catalog" onClick={loadCatalog}><span /> <strong>{catalog ? catalog.supplier.name : 'Loading catalog…'}</strong>{catalog && <em>· {catalog.items.length} SKUs</em>} <Pencil size={12} /></button>
       </header>
 
       <main>
@@ -632,8 +632,16 @@ function ResultDetail({ result, catalogName }: { result: AnalysisResponse; catal
 
       <div className="lines-card">
         <div className="section-title"><div><span className="step">03</span><h2>Verified line items</h2></div><span>{result.lines.length} items</span></div>
-        <div className="table-wrap"><table><thead><tr><th>SKU / description</th><th>Qty</th><th>PO price</th>{converted && <th>Converted</th>}<th>Catalog</th><th>Expected total</th><th>Status</th></tr></thead>
-          <tbody>{result.lines.map((line, index) => <tr key={`${line.sku}-${index}`}><td><code>{line.sku}</code><small>{line.catalogDescription ?? line.description}</small></td><td>{line.quantity}</td><td>{money(line.unitPrice, result.conversion.from)}</td>{converted && <td className="converted-price">{money(line.convertedUnitPrice, result.conversion.to)}</td>}<td>{money(line.catalogUnitPrice, result.conversion.to)}</td><td>{money(line.expectedLineTotal, result.conversion.to)}</td><td><span className={`status-pill ${line.status}`}>{line.status === 'matched' ? <Check size={13} /> : <CircleAlert size={13} />}{line.status}</span></td></tr>)}</tbody>
+        <div className="table-wrap"><table className="line-items-table"><thead><tr><th>SKU / description</th><th>Qty</th><th>PO price</th>{converted && <th>Converted</th>}<th>Catalog</th><th>Expected total</th><th>Status</th></tr></thead>
+          <tbody>{result.lines.map((line, index) => <tr key={`${line.sku}-${index}`}>
+            <td data-label="Item"><code>{line.sku}</code><small>{line.catalogDescription ?? line.description}</small></td>
+            <td data-label="Quantity">{line.quantity}</td>
+            <td data-label={`PO price (${result.conversion.from})`}>{money(line.unitPrice, result.conversion.from)}</td>
+            {converted && <td data-label={`Converted (${result.conversion.to})`} className="converted-price">{money(line.convertedUnitPrice, result.conversion.to)}</td>}
+            <td data-label={`Catalog (${result.conversion.to})`}>{money(line.catalogUnitPrice, result.conversion.to)}</td>
+            <td data-label="Expected total">{money(line.expectedLineTotal, result.conversion.to)}</td>
+            <td data-label="Status"><span className={`status-pill ${line.status}`}>{line.status === 'matched' ? <Check size={13} /> : <CircleAlert size={13} />}{line.status}</span></td>
+          </tr>)}</tbody>
         </table></div>
       </div>
 
