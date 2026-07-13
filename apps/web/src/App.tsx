@@ -8,6 +8,13 @@ import { supplierCatalogSchema, type AnalysisResponse, type CatalogItem } from '
 
 type CatalogResponse = { supplier: { name: string; currency: string }; items: CatalogItem[] };
 type EditableCatalog = { name: string; currency: string; items: CatalogItem[] };
+type BatchAnalysis = {
+  id: string;
+  label: string;
+  status: 'complete' | 'failed';
+  result?: AnalysisResponse;
+  error?: string;
+};
 
 const CATALOG_STORAGE_KEY = 'po-guard-catalog-v1';
 
@@ -37,6 +44,19 @@ PO total: $105.00 USD
 Thanks,
 Marina — Acme Purchasing`;
 
+const EUR_SAMPLE = `PURCHASE ORDER PO-EUR-2003
+Date: July 10, 2026
+Supplier: Northstar Industrial Supply
+Buyer: Acme Distribution Center Europe
+Currency: EUR
+
+SKU              Description                    Qty   Unit price   Amount
+BOLT-M8-50       M8 x 50 mm hex bolts            2      €16.17     €32.34
+GLV-NIT-M        Nitrile work gloves              2      €11.14     €22.28
+WRAP-STRETCH     Industrial stretch wrap          3      €13.18     €39.54
+
+TOTAL: €94.16 EUR`;
+
 const money = (value: number | null, currency = 'USD') => value === null
   ? '—'
   : new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
@@ -45,10 +65,11 @@ const formatModelName = (model: string) => model.replace(/^gpt-/i, 'GPT ');
 
 export function App() {
   const [text, setText] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AnalysisResponse | null>(null);
+  const [analyses, setAnalyses] = useState<BatchAnalysis[]>([]);
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -72,17 +93,26 @@ export function App() {
     void load();
   }, []);
 
-  const chooseFile = (nextFile?: File) => {
-    if (!nextFile) return;
-    setFile(nextFile);
+  const chooseFiles = (nextFiles: File[]) => {
+    if (!nextFiles.length) return;
+    setFiles(current => {
+      const candidates = [...current, ...nextFiles];
+      return candidates.filter((candidate, index) => candidates.findIndex(file =>
+        file.name === candidate.name && file.size === candidate.size && file.lastModified === candidate.lastModified
+      ) === index);
+    });
     setText('');
     setError('');
+  };
+
+  const removeFile = (fileToRemove: File) => {
+    setFiles(current => current.filter(file => file !== fileToRemove));
   };
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
     setDragging(false);
-    chooseFile(event.dataTransfer.files[0]);
+    chooseFiles(Array.from(event.dataTransfer.files));
   };
 
   const loadCatalog = async () => {
@@ -97,30 +127,58 @@ export function App() {
     setError('');
     setLoading(true);
     try {
-      const body = new FormData();
-      if (file) body.append('file', file);
-      else body.append('text', text);
-      if (catalog) {
-        body.append('catalog', JSON.stringify({
-          name: catalog.supplier.name,
-          currency: catalog.supplier.currency,
-          items: catalog.items
-        }));
-      }
-      const response = await fetch('/api/analyze', { method: 'POST', body });
-      const payload = await response.json() as AnalysisResponse | { error?: string };
-      if (!response.ok) throw new Error('error' in payload ? payload.error : 'The PO could not be analyzed.');
-      setResult(payload as AnalysisResponse);
+      const orders = files.length
+        ? files.map((file, index) => ({ id: `${file.name}-${file.size}-${file.lastModified}-${index}`, label: file.name, file }))
+        : [{ id: `pasted-order-${Date.now()}`, label: 'Pasted purchase order', text }];
+
+      const settled = await Promise.allSettled(orders.map(async order => {
+        const body = new FormData();
+        if ('file' in order && order.file) body.append('file', order.file);
+        else if ('text' in order) body.append('text', order.text);
+        if (catalog) {
+          body.append('catalog', JSON.stringify({
+            name: catalog.supplier.name,
+            currency: catalog.supplier.currency,
+            items: catalog.items
+          }));
+        }
+        const response = await fetch('/api/analyze', { method: 'POST', body });
+        const payload = await response.json() as AnalysisResponse | { error?: string };
+        if (!response.ok) throw new Error('error' in payload ? payload.error : 'The PO could not be analyzed.');
+        return payload as AnalysisResponse;
+      }));
+
+      const nextAnalyses: BatchAnalysis[] = settled.map((outcome, index) => ({
+        id: orders[index]!.id,
+        label: orders[index]!.label,
+        status: outcome.status === 'fulfilled' ? 'complete' : 'failed',
+        ...(outcome.status === 'fulfilled'
+          ? { result: outcome.value }
+          : { error: outcome.reason instanceof Error ? outcome.reason.message : 'The PO could not be analyzed.' })
+      }));
+      setAnalyses(nextAnalyses);
+      setActiveAnalysisId(nextAnalyses.find(analysis => analysis.status === 'complete')?.id ?? nextAnalyses[0]?.id ?? null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'The PO could not be analyzed.');
+      setError(cause instanceof Error ? cause.message : 'The orders could not be analyzed.');
     } finally {
       setLoading(false);
     }
   };
 
   const reset = () => {
-    setResult(null); setText(''); setFile(null); setError('');
+    setAnalyses([]); setActiveAnalysisId(null); setText(''); setFiles([]); setError('');
     if (fileInput.current) fileInput.current.value = '';
+  };
+
+  const loadBatchSample = () => {
+    const options = { type: 'text/plain', lastModified: Date.now() };
+    setFiles([
+      new File([CLEAN_SAMPLE], 'po-1042-clean.txt', options),
+      new File([ISSUE_SAMPLE], 'po-1049-with-issues.txt', options),
+      new File([EUR_SAMPLE], 'po-eur-2003.txt', options)
+    ]);
+    setText('');
+    setError('');
   };
 
   const saveCatalog = (nextCatalog: EditableCatalog) => {
@@ -147,7 +205,7 @@ export function App() {
       </header>
 
       <main>
-        {!result ? (
+        {!analyses.length ? (
           <section className="workspace">
             <div className="intro">
               <div className="eyebrow"><ShieldCheck size={14} /> AI-assisted intake</div>
@@ -175,32 +233,37 @@ export function App() {
               )}
 
               <div
-                className={`drop-zone ${dragging ? 'dragging' : ''} ${file ? 'has-file' : ''}`}
+                className={`drop-zone ${dragging ? 'dragging' : ''} ${files.length ? 'has-file' : ''}`}
                 onDragOver={event => { event.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
               >
-                <input ref={fileInput} type="file" accept=".pdf,.csv,.txt,.eml,application/pdf,text/csv,text/plain,message/rfc822" onChange={(event: ChangeEvent<HTMLInputElement>) => chooseFile(event.target.files?.[0])} />
-                {file ? (
-                  <div className="file-chip"><FileText size={22} /><div><strong>{file.name}</strong><span>{(file.size / 1024).toFixed(1)} KB · ready to analyze</span></div><button onClick={() => setFile(null)} aria-label="Remove file"><X size={17} /></button></div>
+                <input ref={fileInput} multiple type="file" accept=".pdf,.csv,.txt,.eml,application/pdf,text/csv,text/plain,message/rfc822" onChange={(event: ChangeEvent<HTMLInputElement>) => { chooseFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ''; }} />
+                {files.length ? (
+                  <div className="selected-files">
+                    <div className="selected-files-heading"><strong>{files.length} order{files.length === 1 ? '' : 's'} ready</strong><button onClick={() => fileInput.current?.click()}><Plus size={14} /> Add more</button></div>
+                    <div className="file-list">{files.map(file => (
+                      <div className="file-chip" key={`${file.name}-${file.size}-${file.lastModified}`}><FileText size={20} /><div><strong>{file.name}</strong><span>{(file.size / 1024).toFixed(1)} KB · analyzed separately</span></div><button onClick={() => removeFile(file)} aria-label={`Remove ${file.name}`}><X size={17} /></button></div>
+                    ))}</div>
+                  </div>
                 ) : (
-                  <button onClick={() => fileInput.current?.click()} className="drop-content"><span className="upload-icon"><Upload size={21} /></span><strong>Drop a PO here or choose a file</strong><small>PDF, CSV, TXT, or EML · up to 10 MB</small></button>
+                  <button onClick={() => fileInput.current?.click()} className="drop-content"><span className="upload-icon"><Upload size={21} /></span><strong>Drop one or more POs here</strong><small>PDF, CSV, TXT, or EML · analyzed separately in parallel</small></button>
                 )}
               </div>
 
               <div className="divider"><span>or paste the contents</span></div>
-              <textarea value={text} disabled={Boolean(file)} onChange={event => setText(event.target.value)} placeholder="Paste an email or purchase order text here…" aria-label="Purchase order text" />
+              <textarea value={text} disabled={files.length > 0} onChange={event => setText(event.target.value)} placeholder="Paste an email or purchase order text here…" aria-label="Purchase order text" />
 
-              <div className="samples"><span>Try an example:</span><button onClick={() => { setText(CLEAN_SAMPLE); setFile(null); }}>Clean PO</button><button onClick={() => { setText(ISSUE_SAMPLE); setFile(null); }}>PO with issues</button></div>
+              <div className="samples"><span>Try an example:</span><button onClick={() => { setText(CLEAN_SAMPLE); setFiles([]); }}>Clean PO</button><button onClick={() => { setText(ISSUE_SAMPLE); setFiles([]); }}>PO with issues</button><button className="batch-sample" onClick={loadBatchSample}>3-order batch</button></div>
               {error && <div className="error-banner"><CircleAlert size={17} />{error}</div>}
-              <button className="primary-button" disabled={loading || (!text.trim() && !file)} onClick={analyze}>
-                {loading ? <><LoaderCircle className="spin" size={18} /> Extracting and checking…</> : <>Analyze purchase order <ArrowRight size={18} /></>}
+              <button className="primary-button" disabled={loading || (!text.trim() && !files.length)} onClick={analyze}>
+                {loading ? <><LoaderCircle className="spin" size={18} /> Analyzing {files.length > 1 ? `${files.length} orders in parallel…` : 'purchase order…'}</> : <>Analyze {files.length > 1 ? `${files.length} orders` : 'purchase order'} <ArrowRight size={18} /></>}
               </button>
               <p className="privacy-note">Your document is used only for this analysis and is not stored.</p>
             </div>
           </section>
         ) : (
-          <Results result={result} onReset={reset} />
+          <BatchResults analyses={analyses} activeId={activeAnalysisId} onSelect={setActiveAnalysisId} onReset={reset} />
         )}
       </main>
       <footer><span>PO Guard prototype</span><span>AI extracts · Rules verify · Humans decide</span></footer>
@@ -448,7 +511,64 @@ function parseCsv(contents: string): string[][] {
   return rows;
 }
 
-function Results({ result, onReset }: { result: AnalysisResponse; onReset: () => void }) {
+function BatchResults({
+  analyses,
+  activeId,
+  onSelect,
+  onReset
+}: {
+  analyses: BatchAnalysis[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onReset: () => void;
+}) {
+  const active = analyses.find(analysis => analysis.id === activeId) ?? analyses[0];
+  const confirmed = analyses.filter(analysis => analysis.result?.status === 'confirmed').length;
+  const review = analyses.filter(analysis => analysis.result?.status === 'review_required').length;
+  const failed = analyses.filter(analysis => analysis.status === 'failed').length;
+
+  return (
+    <section className="results-page">
+      <button className="back-button" onClick={onReset}><RotateCcw size={16} /> Analyze another batch</button>
+
+      {analyses.length > 1 && (
+        <div className="batch-panel">
+          <div className="batch-panel-heading">
+            <div><span className="result-kicker">Parallel batch complete</span><h1>{analyses.length} orders analyzed independently</h1></div>
+            <div className="batch-stats"><span className="confirmed"><CheckCircle2 size={15} /> {confirmed} confirmed</span><span className="review"><CircleAlert size={15} /> {review} review</span>{failed > 0 && <span className="failed"><X size={15} /> {failed} failed</span>}</div>
+          </div>
+          <div className="batch-orders" role="tablist" aria-label="Purchase order results">
+            {analyses.map((analysis, index) => {
+              const needsReview = analysis.result?.status === 'review_required';
+              const isFailed = analysis.status === 'failed';
+              return (
+                <button
+                  key={analysis.id}
+                  className={`batch-order ${analysis.id === active?.id ? 'active' : ''}`}
+                  onClick={() => onSelect(analysis.id)}
+                  role="tab"
+                  aria-selected={analysis.id === active?.id}
+                >
+                  <span className={`batch-order-number ${isFailed ? 'failed' : needsReview ? 'review' : 'confirmed'}`}>{isFailed ? <X size={15} /> : needsReview ? <CircleAlert size={15} /> : <Check size={15} />}</span>
+                  <span><small>Order {index + 1}</small><strong>{analysis.result?.extracted.poNumber ?? analysis.label}</strong><em>{analysis.label}</em></span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {active?.result ? <ResultDetail key={active.id} result={active.result} /> : (
+        <div className="failed-result">
+          <span><CircleAlert size={24} /></span>
+          <div><p className="result-kicker">Analysis failed</p><h1>{active?.label ?? 'Purchase order'}</h1><p>{active?.error ?? 'The PO could not be analyzed.'}</p></div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ResultDetail({ result }: { result: AnalysisResponse }) {
   const isConfirmed = result.status === 'confirmed';
   const converted = result.conversion.from !== result.conversion.to;
   const [copied, setCopied] = useState(false);
@@ -458,8 +578,7 @@ function Results({ result, onReset }: { result: AnalysisResponse; onReset: () =>
   };
 
   return (
-    <section className="results-page">
-      <button className="back-button" onClick={onReset}><RotateCcw size={15} /> Analyze another PO</button>
+    <div className="result-detail">
       <div className={`result-hero ${isConfirmed ? 'success' : 'warning'}`}>
         <div className="result-icon">{isConfirmed ? <CheckCircle2 size={25} /> : <CircleAlert size={25} />}</div>
         <div><span className="result-kicker">Analysis complete</span><h1>{isConfirmed ? 'Ready to confirm' : 'Review required'}</h1><p>{result.confirmation}</p></div>
@@ -503,6 +622,6 @@ function Results({ result, onReset }: { result: AnalysisResponse; onReset: () =>
         <div><span>Confirmation draft</span><p>{result.confirmation}</p></div>
         <button onClick={copyConfirmation}>{copied ? <Check size={16} /> : <Clipboard size={16} />}{copied ? 'Copied' : 'Copy confirmation'}</button>
       </div>
-    </section>
+    </div>
   );
 }

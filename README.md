@@ -7,6 +7,7 @@ The core design rule is **LLM extracts; code decides**. OpenAI handles messy, se
 ## What it does
 
 - Accepts pasted text, email content, PDF, CSV, TXT, or EML files (up to 10 MB).
+- Accepts multiple order files at once, analyzes them concurrently in isolated requests, and keeps each result independently reviewable.
 - Lets a reviewer import a CSV/JSON supplier catalog directly, or use OpenAI to extract an irregular catalog from PDF, image, text, CSV, or JSON.
 - Keeps extracted catalog rows editable before they are used for comparison.
 - Extracts PO metadata and line items with the OpenAI Responses API and strict Structured Outputs.
@@ -77,7 +78,7 @@ The demo catalog is intentionally small and lives in `apps/api/src/domain/catalo
 - `POST /api/catalog/extract` — AI extraction of a supplier catalog file (PDF, image, TXT, CSV, or JSON).
 - `POST /api/analyze` — multipart body with either `text` or `file`; it optionally accepts a `catalog` JSON field containing the supplier name, currency, and items to use for that comparison.
 
-The analysis result contains the extracted PO, verified lines, discrepancies, totals, status, model used, and confirmation draft.
+The analysis result contains the extracted PO, verified lines, discrepancies, totals, status, model used, and confirmation draft. The browser submits one `/api/analyze` request per file concurrently and uses `Promise.allSettled`, so a failed document does not discard successful results from the same batch.
 
 When the order currency differs from the catalog currency, the API retrieves a daily reference rate from [Frankfurter](https://frankfurter.dev/), using the PO date when one was extracted and the latest rate otherwise. It converts PO prices into the catalog currency and returns the rate, date, original amounts, and converted amounts in the analysis result. Rates are cached for one hour. Frankfurter requires no API key.
 
@@ -101,6 +102,7 @@ When the order currency differs from the catalog currency, the API retrieves a d
 - **Browser-local custom catalog.** Imported price lists are kept in `localStorage` for convenience and sent with each analysis. This avoids server-side persistence in the prototype, but production would use authenticated, versioned supplier contracts.
 - **One deployable service.** The monorepo still separates UI, API, and contracts, while a single container keeps deployment and demo reliability simple.
 - **Human in the loop.** PO Guard drafts a result but does not transmit a supplier confirmation or create an ERP order. Those are natural next actions after authentication, roles, and audit history exist.
+- **Parallel, isolated batch intake.** Multiple files are separate API calls sharing only the selected catalog. This avoids cross-order LLM context contamination and lets partial successes remain usable; the prototype does not yet impose a concurrency queue for very large batches.
 
 ## Production next steps
 
@@ -112,4 +114,4 @@ When the order currency differs from the catalog currency, the API retrieves a d
 
 ## Demo flow
 
-For a short demo, open **PO with issues** from the example buttons and analyze it. It demonstrates three useful failure modes: a price mismatch, an unknown SKU, and a stated-total mismatch. Then run **Clean PO** to show the confirmation path.
+For a short demo, choose **3-order batch**. It runs a clean USD order, an order with a price mismatch and unknown SKU, and a EUR order that is converted into the catalog's USD currency. Use the batch tabs to review each result without losing the others.
