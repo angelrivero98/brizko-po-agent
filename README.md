@@ -6,7 +6,7 @@ The core design rule is **LLM extracts; code decides**. Claude handles messy, se
 
 ## What it does
 
-- Accepts pasted text, email content, PDF, TXT, or EML files (up to 10 MB).
+- Accepts pasted text, email content, PDF, CSV, TXT, or EML files (up to 10 MB).
 - Lets a reviewer import a CSV/JSON supplier catalog directly, or use Claude to extract an irregular catalog from PDF, image, text, CSV, or JSON.
 - Keeps extracted catalog rows editable before they are used for comparison.
 - Extracts PO metadata and line items with Anthropic tool use and a forced JSON schema.

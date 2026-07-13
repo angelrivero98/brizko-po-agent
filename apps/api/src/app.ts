@@ -84,17 +84,17 @@ export function createApp() {
       }
 
       if (!pastedText && !file) {
-        res.status(400).json({ error: 'Paste purchase-order text or attach a PDF, TXT, or EML file.' });
+          res.status(400).json({ error: 'Paste purchase-order text or attach a PDF, CSV, TXT, or EML file.' });
         return;
       }
 
       let source: { kind: 'text'; text: string } | { kind: 'pdf'; data: string };
       if (file) {
         const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
-        const isText = ['text/plain', 'message/rfc822'].includes(file.mimetype)
-          || /\.(txt|eml)$/i.test(file.originalname);
+        const isText = ['text/plain', 'text/csv', 'application/csv', 'message/rfc822'].includes(file.mimetype)
+          || /\.(csv|txt|eml)$/i.test(file.originalname);
         if (!isPdf && !isText) {
-          res.status(415).json({ error: 'Unsupported file. Use PDF, TXT, or EML.' });
+          res.status(415).json({ error: 'Unsupported file. Use PDF, CSV, TXT, or EML.' });
           return;
         }
         source = isPdf

@@ -1,0 +1,5 @@
+po_number,order_date,supplier,buyer,currency,sku,description,quantity,unit_price,line_total,order_total
+PO-2002,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,BOLT-M8-50,M8 x 50 mm hex bolts,3,21.00,63.00,200.00
+PO-2002,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,WRAP-STRETCH,Industrial stretch wrap,2,16.25,32.50,200.00
+PO-2002,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,SAFETY-VEST-XL,High visibility safety vest,1,9.50,9.50,200.00
+PO-2002,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,TAPE-PACK-48,Clear packing tape,5,,,200.00

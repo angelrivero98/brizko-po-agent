@@ -178,11 +178,11 @@ export function App() {
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
               >
-                <input ref={fileInput} type="file" accept=".pdf,.txt,.eml,application/pdf,text/plain,message/rfc822" onChange={(event: ChangeEvent<HTMLInputElement>) => chooseFile(event.target.files?.[0])} />
+                <input ref={fileInput} type="file" accept=".pdf,.csv,.txt,.eml,application/pdf,text/csv,text/plain,message/rfc822" onChange={(event: ChangeEvent<HTMLInputElement>) => chooseFile(event.target.files?.[0])} />
                 {file ? (
                   <div className="file-chip"><FileText size={22} /><div><strong>{file.name}</strong><span>{(file.size / 1024).toFixed(1)} KB · ready to analyze</span></div><button onClick={() => setFile(null)} aria-label="Remove file"><X size={17} /></button></div>
                 ) : (
-                  <button onClick={() => fileInput.current?.click()} className="drop-content"><span className="upload-icon"><Upload size={21} /></span><strong>Drop a PO here or choose a file</strong><small>PDF, TXT, or EML · up to 10 MB</small></button>
+                  <button onClick={() => fileInput.current?.click()} className="drop-content"><span className="upload-icon"><Upload size={21} /></span><strong>Drop a PO here or choose a file</strong><small>PDF, CSV, TXT, or EML · up to 10 MB</small></button>
                 )}
               </div>
 

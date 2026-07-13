@@ -1,0 +1,4 @@
+po_number,order_date,supplier,buyer,currency,sku,description,quantity,unit_price,line_total,order_total
+PO-2001,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,BOLT-M8-50,M8 x 50 mm hex bolts,4,18.50,74.00,148.25
+PO-2001,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,GLV-NIT-M,Nitrile work gloves,2,12.75,25.50,148.25
+PO-2001,2026-07-12,Northstar Industrial Supply,Acme Distribution Center,USD,WRAP-STRETCH,Industrial stretch wrap,3,16.25,48.75,148.25

@@ -1,0 +1,4 @@
+po_number,order_date,supplier,buyer,currency,sku,description,quantity,unit_price,line_total,order_total
+PO-EUR-2003,2026-07-10,Northstar Industrial Supply Europe,Acme European Distribution,EUR,BOLT-M8-50,M8 x 50 mm hex bolts,2,16.17,32.34,94.16
+PO-EUR-2003,2026-07-10,Northstar Industrial Supply Europe,Acme European Distribution,EUR,GLV-NIT-M,Nitrile work gloves,3,11.14,33.42,94.16
+PO-EUR-2003,2026-07-10,Northstar Industrial Supply Europe,Acme European Distribution,EUR,WRAP-STRETCH,Industrial stretch wrap,2,14.20,28.40,94.16
