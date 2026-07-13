@@ -1,0 +1,19 @@
+{
+  "name": "brizko-po-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @po/api\" \"npm run dev -w @po/web\"",
+    "build": "npm run build -w @po/shared && npm run build -w @po/web && npm run build -w @po/api",
+    "start": "npm run start -w @po/api",
+    "typecheck": "npm run build -w @po/shared && npm run typecheck -w @po/api && npm run typecheck -w @po/web",
+    "test": "npm run build -w @po/shared && npm run test -w @po/api"
+  },
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^6.0.3"
+  }
+}
