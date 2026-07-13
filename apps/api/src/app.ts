@@ -1,10 +1,8 @@
 import path from 'node:path';
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import express, { type ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import OpenAI from 'openai';
 import { ZodError } from 'zod';
 import { supplierCatalogSchema } from '@po/shared';
 import { catalog, supplier } from './domain/catalog.js';
@@ -15,24 +13,6 @@ import { getCurrencyConversion } from './services/exchange-rate.service.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES } });
-const DEMO_AUDIO_TOKEN_SHA256 = '601be757c8cf9333a2b4ef0911d8627c2fd8bfb12bdd268e9e76b90ebb27affc';
-const DEMO_NARRATION = `Hola, soy Angel, y esta es PO Guard, una herramienta de recepción de órdenes de compra asistida por inteligencia artificial.
-
-El objetivo es convertir documentos desordenados en confirmaciones verificables, manteniendo siempre a una persona en el circuito.
-
-Primero, el usuario puede trabajar con el catálogo de demostración o cargar su propia lista de precios. El catálogo acepta CSV o JSON estructurado, y también PDFs, imágenes o texto que OpenAI convierte en filas editables. Nada se usa para comparar hasta que el usuario lo revisa.
-
-Para la demostración voy a ejecutar un lote de tres órdenes. Cada archivo se analiza de forma independiente y en paralelo, por lo que un fallo no cancela el resto. El modelo extrae proveedor, número de orden, fecha, moneda y partidas. Después, reglas determinísticas en TypeScript comparan SKU, cantidad, precio y totales contra el catálogo.
-
-La primera orden coincide completamente. El resultado muestra el total del documento, el total esperado y cada partida verificada. También asigna un identificador único al análisis y genera una confirmación lista para copiar.
-
-La segunda orden requiere revisión. Aquí, PO Guard detecta un precio incorrecto para BOLT M ocho cincuenta, y un SKU que no existe en el catálogo. La inteligencia artificial no aprueba la orden: únicamente extrae. La decisión final proviene de reglas auditables y queda claramente marcada para revisión humana.
-
-La tercera orden está en euros, mientras el catálogo está en dólares. El sistema obtiene un tipo de cambio de referencia, conserva los importes originales y compara los valores convertidos. En este caso, una diferencia de precio permanece marcada para revisión.
-
-Finalmente, una orden confirmada puede descargarse como PDF con su badge, proveedor, comprador, partidas, totales, modelo utilizado y U U I D del análisis.
-
-La solución está construida como monorepo TypeScript, con React, Express, Zod y la API de OpenAI, y está desplegada en Render. El principio central es simple: la inteligencia artificial extrae, las reglas verifican y las personas deciden.`;
 
 export function createApp() {
   const app = express();
@@ -130,30 +110,6 @@ export function createApp() {
       const catalogCurrency = customCatalog?.currency ?? supplier.currency;
       const conversion = await getCurrencyConversion(purchaseOrder.currency, catalogCurrency, purchaseOrder.orderDate);
       res.json(verifyPurchaseOrder(purchaseOrder, modelUsed, activeCatalog, conversion));
-    } catch (error) {
-      next(error);
-    }
-  });
-
-  app.get('/api/internal/demo-narration', async (req, res, next) => {
-    try {
-      const token = req.header('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
-      const receivedHash = createHash('sha256').update(token).digest();
-      const expectedHash = Buffer.from(DEMO_AUDIO_TOKEN_SHA256, 'hex');
-      if (receivedHash.length !== expectedHash.length || !timingSafeEqual(receivedHash, expectedHash)) {
-        res.status(404).json({ error: 'Not found.' });
-        return;
-      }
-
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const speech = await client.audio.speech.create({
-        model: 'tts-1-hd',
-        voice: 'nova',
-        input: DEMO_NARRATION,
-        response_format: 'mp3',
-        speed: 1.03
-      });
-      res.type('audio/mpeg').send(Buffer.from(await speech.arrayBuffer()));
     } catch (error) {
       next(error);
     }
