@@ -159,6 +159,13 @@ table code { font-family: 'DM Mono', monospace; color: var(--ink); font-weight: 
 .result-kicker { display: block; margin-bottom: 4px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .result-hero h1 { margin: 0 0 7px; font-size: 32px; letter-spacing: -.04em; }
 .result-hero p { margin: 0; max-width: 750px; color: #5f6964; font-size: 14px; line-height: 1.6; }
+.result-proof { display: flex; align-items: flex-end; flex-direction: column; gap: 8px; }
+.verification-seal { display: flex; align-items: center; gap: 8px; min-width: 172px; padding: 9px 11px; border: 1px solid; border-radius: 10px; background: rgba(255, 255, 255, .72); }
+.verification-seal.confirmed { border-color: #a9d2b8; color: var(--green); }
+.verification-seal.review { border-color: #e2bd91; color: var(--amber); }
+.verification-seal > span { display: flex; flex-direction: column; gap: 1px; }
+.verification-seal strong { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.verification-seal small { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 8px; }
 .model-badge { padding: 8px 11px; border: 1px solid rgba(30, 107, 79, .15); border-radius: 99px; background: rgba(255, 255, 255, .65); color: #61706a; font-size: 10px; white-space: nowrap; }
 .conversion-banner { display: flex; align-items: center; gap: 20px; margin: 16px 0 -6px; padding: 12px 16px; border: 1px solid #cddbcf; border-radius: 10px; background: #f5faf4; color: #5b6862; font-size: 10px; }
 .conversion-banner div { display: flex; align-items: center; gap: 8px; }
@@ -193,6 +200,11 @@ td small { display: block; max-width: 280px; margin-top: 5px; color: #818984; fo
 .confirmation-card span { color: var(--lime); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; }
 .confirmation-card p { margin: 7px 0 0; color: #d7dfda; font-size: 14px; line-height: 1.55; }
 .confirmation-card button { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 10px 13px; border: 1px solid #4c5c56; border-radius: 8px; background: #283a34; color: white; font-size: 11px; font-weight: 700; }
+.confirmation-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.confirmation-card .download-confirmation { border-color: var(--lime); background: var(--lime); color: #193126; }
+.confirmation-card .download-confirmation:hover:not(:disabled) { background: #d7fa86; }
+.confirmation-card button:disabled { opacity: .6; cursor: wait; }
+.result-download-error { margin-top: 10px; }
 
 footer { max-width: 1180px; width: calc(100% - 48px); margin: auto auto 0; padding: 22px 0 26px; display: flex; justify-content: space-between; border-top: 1px solid var(--line); color: #929a95; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
 
@@ -201,7 +213,7 @@ footer { max-width: 1180px; width: calc(100% - 48px); margin: auto auto 0; paddi
   .intro { position: static; padding: 0; }
   .intro h1 { max-width: 650px; }
   .result-hero { grid-template-columns: auto 1fr; }
-  .model-badge { grid-column: 2; justify-self: start; }
+  .result-proof { grid-column: 2; align-items: flex-start; }
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .summary-grid div { border-bottom: 1px solid var(--line); }
   .summary-grid div:nth-child(even) { border-right: 0; }
@@ -236,10 +248,12 @@ footer { max-width: 1180px; width: calc(100% - 48px); margin: auto auto 0; paddi
   .batch-orders { grid-template-columns: 1fr; }
   .result-hero { padding: 20px; }
   .result-icon { display: none; }
-  .result-hero, .model-badge { grid-column: 1; }
+  .result-hero, .result-proof { grid-column: 1; }
   .conversion-banner { align-items: flex-start; flex-direction: column; gap: 8px; }
   .summary-grid { grid-template-columns: 1fr; }
   .summary-grid div { border-right: 0; border-bottom: 1px solid var(--line); }
   .confirmation-card { align-items: flex-start; flex-direction: column; }
+  .confirmation-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .confirmation-actions button { justify-content: center; }
   footer { flex-direction: column; gap: 8px; }
 }

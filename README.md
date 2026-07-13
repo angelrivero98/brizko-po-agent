@@ -15,6 +15,7 @@ The core design rule is **LLM extracts; code decides**. OpenAI handles messy, se
 - Checks SKU, quantity, unit price, line totals, and stated PO total against a small supplier catalog.
 - Supports orders in a different currency from the catalog and converts order prices before comparison.
 - Shows a review-ready result and generates a copyable confirmation.
+- Generates a downloadable PDF verification record with the status badge, analysis reference, catalog, order metadata, line-item checks, totals, currency conversion, model, and confirmation text.
 - Does not store uploaded documents or place orders automatically.
 
 ## Architecture
@@ -103,6 +104,7 @@ When the order currency differs from the catalog currency, the API retrieves a d
 - **One deployable service.** The monorepo still separates UI, API, and contracts, while a single container keeps deployment and demo reliability simple.
 - **Human in the loop.** PO Guard drafts a result but does not transmit a supplier confirmation or create an ERP order. Those are natural next actions after authentication, roles, and audit history exist.
 - **Parallel, isolated batch intake.** Multiple files are separate API calls sharing only the selected catalog. This avoids cross-order LLM context contamination and lets partial successes remain usable; the prototype does not yet impose a concurrency queue for very large batches.
+- **Client-generated verification PDF.** The structured, validated result is rendered into a PDF in the browser, so the server does not need to retain the order. Confirmed orders receive a `READY AND ANALYZED` badge; discrepancy reports are visibly marked `REVIEW REQUIRED`. The document includes an analysis UUID but is an automated verification record, not a digital signature or ERP approval.
 
 ## Production next steps
 

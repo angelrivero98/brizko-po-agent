@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   ArrowRight, Check, CheckCircle2, ChevronDown, CircleAlert, Clipboard,
-  FileText, LoaderCircle, PackageCheck, Pencil, Plus, RotateCcw, ShieldCheck,
+  Download, FileText, LoaderCircle, PackageCheck, Pencil, Plus, RotateCcw, ShieldCheck,
   Sparkles, Trash2, Upload, X
 } from 'lucide-react';
 import { supplierCatalogSchema, type AnalysisResponse, type CatalogItem } from '@po/shared';
+import { downloadConfirmationPdf } from './confirmation-pdf';
 
 type CatalogResponse = { supplier: { name: string; currency: string }; items: CatalogItem[] };
 type EditableCatalog = { name: string; currency: string; items: CatalogItem[] };
@@ -263,7 +264,7 @@ export function App() {
             </div>
           </section>
         ) : (
-          <BatchResults analyses={analyses} activeId={activeAnalysisId} onSelect={setActiveAnalysisId} onReset={reset} />
+          <BatchResults analyses={analyses} activeId={activeAnalysisId} catalogName={catalog?.supplier.name ?? 'Selected supplier catalog'} onSelect={setActiveAnalysisId} onReset={reset} />
         )}
       </main>
       <footer><span>PO Guard prototype</span><span>AI extracts · Rules verify · Humans decide</span></footer>
@@ -514,11 +515,13 @@ function parseCsv(contents: string): string[][] {
 function BatchResults({
   analyses,
   activeId,
+  catalogName,
   onSelect,
   onReset
 }: {
   analyses: BatchAnalysis[];
   activeId: string | null;
+  catalogName: string;
   onSelect: (id: string) => void;
   onReset: () => void;
 }) {
@@ -558,7 +561,7 @@ function BatchResults({
         </div>
       )}
 
-      {active?.result ? <ResultDetail key={active.id} result={active.result} /> : (
+      {active?.result ? <ResultDetail key={active.id} result={active.result} catalogName={catalogName} /> : (
         <div className="failed-result">
           <span><CircleAlert size={24} /></span>
           <div><p className="result-kicker">Analysis failed</p><h1>{active?.label ?? 'Purchase order'}</h1><p>{active?.error ?? 'The PO could not be analyzed.'}</p></div>
@@ -568,13 +571,26 @@ function BatchResults({
   );
 }
 
-function ResultDetail({ result }: { result: AnalysisResponse }) {
+function ResultDetail({ result, catalogName }: { result: AnalysisResponse; catalogName: string }) {
   const isConfirmed = result.status === 'confirmed';
   const converted = result.conversion.from !== result.conversion.to;
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   const copyConfirmation = async () => {
     await navigator.clipboard.writeText(result.confirmation);
     setCopied(true); setTimeout(() => setCopied(false), 1500);
+  };
+  const downloadPdf = async () => {
+    setDownloadError('');
+    setDownloading(true);
+    try {
+      await downloadConfirmationPdf(result, { catalogName });
+    } catch {
+      setDownloadError('The PDF could not be generated. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -582,7 +598,10 @@ function ResultDetail({ result }: { result: AnalysisResponse }) {
       <div className={`result-hero ${isConfirmed ? 'success' : 'warning'}`}>
         <div className="result-icon">{isConfirmed ? <CheckCircle2 size={25} /> : <CircleAlert size={25} />}</div>
         <div><span className="result-kicker">Analysis complete</span><h1>{isConfirmed ? 'Ready to confirm' : 'Review required'}</h1><p>{result.confirmation}</p></div>
-        <div className="model-badge">Processed by {formatModelName(result.modelUsed)}</div>
+        <div className="result-proof">
+          <div className={`verification-seal ${isConfirmed ? 'confirmed' : 'review'}`}><ShieldCheck size={16} /><span><strong>{isConfirmed ? 'Ready & analyzed' : 'Review required'}</strong><small>Ref. {result.id.slice(0, 8).toUpperCase()}</small></span></div>
+          <div className="model-badge">Processed by {formatModelName(result.modelUsed)}</div>
+        </div>
       </div>
 
       {converted && (
@@ -620,8 +639,12 @@ function ResultDetail({ result }: { result: AnalysisResponse }) {
 
       <div className="confirmation-card">
         <div><span>Confirmation draft</span><p>{result.confirmation}</p></div>
-        <button onClick={copyConfirmation}>{copied ? <Check size={16} /> : <Clipboard size={16} />}{copied ? 'Copied' : 'Copy confirmation'}</button>
+        <div className="confirmation-actions">
+          <button className="download-confirmation" disabled={downloading} onClick={() => void downloadPdf()}>{downloading ? <LoaderCircle className="spin" size={16} /> : <Download size={16} />}{downloading ? 'Generating PDF…' : isConfirmed ? 'Download verified PDF' : 'Download review report'}</button>
+          <button onClick={copyConfirmation}>{copied ? <Check size={16} /> : <Clipboard size={16} />}{copied ? 'Copied' : 'Copy confirmation'}</button>
+        </div>
       </div>
+      {downloadError && <div className="error-banner result-download-error"><CircleAlert size={17} />{downloadError}</div>}
     </div>
   );
 }
