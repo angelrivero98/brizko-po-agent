@@ -7,6 +7,7 @@ import { ZodError } from 'zod';
 import { supplierCatalogSchema } from '@po/shared';
 import { catalog, supplier } from './domain/catalog.js';
 import { verifyPurchaseOrder } from './domain/verify-purchase-order.js';
+import { AnthropicCatalogExtractor, type CatalogSource } from './services/anthropic-catalog-extractor.js';
 import { AnthropicExtractor } from './services/anthropic-extractor.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -24,6 +25,41 @@ export function createApp() {
 
   app.get('/api/catalog', (_req, res) => {
     res.json({ supplier, items: catalog });
+  });
+
+  app.post('/api/catalog/extract', upload.single('file'), async (req, res, next) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({ error: 'Attach a catalog file to extract.' });
+        return;
+      }
+
+      const extension = path.extname(file.originalname).toLowerCase();
+      let source: CatalogSource;
+      if (file.mimetype === 'application/pdf' || extension === '.pdf') {
+        source = { kind: 'pdf', data: file.buffer.toString('base64') };
+      } else if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.mimetype)) {
+        source = {
+          kind: 'image',
+          data: file.buffer.toString('base64'),
+          mediaType: file.mimetype as Extract<CatalogSource, { kind: 'image' }>['mediaType']
+        };
+      } else if (
+        ['text/plain', 'text/csv', 'application/json'].includes(file.mimetype)
+        || ['.txt', '.csv', '.json'].includes(extension)
+      ) {
+        source = { kind: 'text', text: file.buffer.toString('utf8') };
+      } else {
+        res.status(415).json({ error: 'AI catalog extraction supports PDF, PNG, JPG, WEBP, GIF, TXT, CSV, and JSON.' });
+        return;
+      }
+
+      const extractor = new AnthropicCatalogExtractor();
+      res.json(await extractor.extract(source));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post('/api/analyze', upload.single('file'), async (req, res, next) => {

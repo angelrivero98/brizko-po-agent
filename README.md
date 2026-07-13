@@ -7,7 +7,8 @@ The core design rule is **LLM extracts; code decides**. Claude handles messy, se
 ## What it does
 
 - Accepts pasted text, email content, PDF, TXT, or EML files (up to 10 MB).
-- Lets a reviewer import a CSV/JSON supplier catalog, edit its rows, and reuse it from browser storage.
+- Lets a reviewer import a CSV/JSON supplier catalog directly, or use Claude to extract an irregular catalog from PDF, image, text, CSV, or JSON.
+- Keeps extracted catalog rows editable before they are used for comparison.
 - Extracts PO metadata and line items with Anthropic tool use and a forced JSON schema.
 - Validates the model response with Zod before using it.
 - Checks SKU, quantity, unit price, line totals, and stated PO total against a small supplier catalog.
@@ -70,6 +71,7 @@ The demo catalog is intentionally small and lives in `apps/api/src/domain/catalo
 
 - `GET /api/health` — service and AI configuration status.
 - `GET /api/catalog` — demo supplier and price list.
+- `POST /api/catalog/extract` — AI extraction of a supplier catalog file (PDF, image, TXT, CSV, or JSON).
 - `POST /api/analyze` — multipart body with either `text` or `file`; it optionally accepts a `catalog` JSON field containing the supplier name, currency, and items to use for that comparison.
 
 The analysis result contains the extracted PO, verified lines, discrepancies, totals, status, model used, and confirmation draft.
@@ -87,6 +89,7 @@ The analysis result contains the extracted PO, verified lines, discrepancies, to
 
 - **Tool use instead of free-form JSON.** The model is forced to call one extraction tool whose input has a JSON schema. Zod then validates the result. This costs a little prompt/schema space but substantially reduces malformed responses.
 - **Claude receives PDFs directly.** This preserves tables and layout without adding OCR/PDF parsing infrastructure. The tradeoff is provider coupling for PDF intake.
+- **Catalog extraction is review-first.** Claude can turn an irregular price list or image into editable rows, but the user must save that catalog before it becomes the deterministic comparison source.
 - **Deterministic verification.** The model never sees the approved catalog and cannot approve an order. Business rules are testable, explainable, and safe to change independently.
 - **No database.** The weekend scope is intake and verification, not order lifecycle management. Results are intentionally ephemeral; production would store an audit record and document hash.
 - **Browser-local custom catalog.** Imported price lists are kept in `localStorage` for convenience and sent with each analysis. This avoids server-side persistence in the prototype, but production would use authenticated, versioned supplier contracts.

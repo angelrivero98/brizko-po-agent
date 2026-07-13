@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'r
 import {
   ArrowRight, Check, CheckCircle2, ChevronDown, CircleAlert, Clipboard,
   FileText, LoaderCircle, PackageCheck, Pencil, Plus, RotateCcw, ShieldCheck,
-  Trash2, Upload, X
+  Sparkles, Trash2, Upload, X
 } from 'lucide-react';
 import { supplierCatalogSchema, type AnalysisResponse, type CatalogItem } from '@po/shared';
 
@@ -222,7 +222,10 @@ function CatalogEditor({
     items: catalog.items.map(item => ({ ...item }))
   }));
   const [editorError, setEditorError] = useState('');
+  const [editorNotice, setEditorNotice] = useState('');
+  const [extractingCatalog, setExtractingCatalog] = useState(false);
   const catalogFileInput = useRef<HTMLInputElement>(null);
+  const aiCatalogFileInput = useRef<HTMLInputElement>(null);
 
   const updateItem = (index: number, changes: Partial<CatalogItem>) => {
     setDraft(current => ({
@@ -243,6 +246,7 @@ function CatalogEditor({
   const importCatalog = async (inputFile?: File) => {
     if (!inputFile) return;
     setEditorError('');
+    setEditorNotice('');
     try {
       const contents = await inputFile.text();
       let imported: EditableCatalog;
@@ -302,6 +306,38 @@ function CatalogEditor({
     }
   };
 
+  const extractCatalogWithAi = async (inputFile?: File) => {
+    if (!inputFile) return;
+    setEditorError('');
+    setEditorNotice('');
+    setExtractingCatalog(true);
+    try {
+      const body = new FormData();
+      body.append('file', inputFile);
+      const response = await fetch('/api/catalog/extract', { method: 'POST', body });
+      const payload = await response.json() as {
+        catalog?: EditableCatalog;
+        warnings?: string[];
+        modelUsed?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.catalog) {
+        throw new Error(payload.error ?? 'The AI could not extract this catalog.');
+      }
+      const parsed = supplierCatalogSchema.parse(payload.catalog);
+      setDraft(parsed);
+      const warningText = payload.warnings?.length
+        ? ` Review ${payload.warnings.length} extraction warning${payload.warnings.length === 1 ? '' : 's'} before saving.`
+        : '';
+      setEditorNotice(`Extracted ${parsed.items.length} SKU${parsed.items.length === 1 ? '' : 's'} with ${payload.modelUsed?.replace('claude-', 'Claude ') ?? 'Claude'}.${warningText}`);
+    } catch (cause) {
+      setEditorError(cause instanceof Error ? cause.message : 'The AI could not extract this catalog.');
+    } finally {
+      setExtractingCatalog(false);
+      if (aiCatalogFileInput.current) aiCatalogFileInput.current.value = '';
+    }
+  };
+
   const save = () => {
     setEditorError('');
     const normalized = {
@@ -343,7 +379,12 @@ function CatalogEditor({
           <label>Currency<input value={draft.currency} maxLength={3} onChange={event => updateCurrency(event.target.value)} /></label>
           <div className="catalog-actions">
             <input ref={catalogFileInput} type="file" accept=".csv,.json,text/csv,application/json" onChange={event => void importCatalog(event.target.files?.[0])} />
-            <button onClick={() => catalogFileInput.current?.click()}><Upload size={15} /> Import CSV / JSON</button>
+            <input ref={aiCatalogFileInput} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.json,application/pdf,image/png,image/jpeg,image/webp,image/gif,text/plain,text/csv,application/json" onChange={event => void extractCatalogWithAi(event.target.files?.[0])} />
+            <button onClick={() => catalogFileInput.current?.click()}><Upload size={15} /> Import structured</button>
+            <button className="ai-catalog-button" disabled={extractingCatalog} onClick={() => aiCatalogFileInput.current?.click()}>
+              {extractingCatalog ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />}
+              {extractingCatalog ? 'Extracting…' : 'Extract with AI'}
+            </button>
             <a href="/catalog-template.csv" download>CSV template</a>
             <button onClick={() => setDraft(current => ({ ...current, items: [...current.items, { sku: '', description: '', unitPrice: 0, currency: current.currency }] }))}><Plus size={15} /> Add row</button>
           </div>
@@ -363,6 +404,7 @@ function CatalogEditor({
           </table>
         </div>
 
+        {editorNotice && <div className="catalog-notice"><Sparkles size={16} />{editorNotice}</div>}
         {editorError && <div className="error-banner catalog-error"><CircleAlert size={17} />{editorError}</div>}
         <div className="catalog-modal-footer">
           <button className="reset-catalog" onClick={() => void onRestoreDefault().then(onClose)}><RotateCcw size={14} /> Restore demo catalog</button>
