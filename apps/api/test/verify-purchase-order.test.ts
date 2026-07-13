@@ -22,7 +22,12 @@ describe('verifyPurchaseOrder', () => {
     const result = verifyPurchaseOrder(baseOrder, 'test-model');
     assert.equal(result.status, 'confirmed');
     assert.equal(result.discrepancies.length, 0);
-    assert.deepEqual(result.totals, { stated: 99.5, submitted: 99.5, catalog: 99.5 });
+    assert.deepEqual(result.totals, {
+      stated: 99.5,
+      submitted: 99.5,
+      submittedInCatalogCurrency: 99.5,
+      catalog: 99.5
+    });
   });
 
   it('flags price, unknown SKU, and total discrepancies', () => {
@@ -58,5 +63,25 @@ describe('verifyPurchaseOrder', () => {
     assert.equal(result.status, 'review_required');
     assert.equal(result.discrepancies[0]?.code, 'PRICE_MISMATCH');
     assert.equal(result.discrepancies[0]?.expected, 20);
+  });
+
+  it('converts order prices into the catalog currency before comparing', () => {
+    const result = verifyPurchaseOrder({
+      ...baseOrder,
+      currency: 'EUR',
+      items: [{ sku: 'BOLT-M8-50', description: 'Bolts', quantity: 4, unitPrice: 9.25, lineTotal: 37 }],
+      statedTotal: 37
+    }, 'test-model', [
+      { sku: 'BOLT-M8-50', description: 'Contract bolts', unitPrice: 18.5, currency: 'USD' }
+    ], {
+      from: 'EUR', to: 'USD', rate: 2, date: '2026-07-12', source: 'frankfurter'
+    });
+
+    assert.equal(result.status, 'confirmed');
+    assert.equal(result.lines[0]?.convertedUnitPrice, 18.5);
+    assert.equal(result.totals.submitted, 37);
+    assert.equal(result.totals.submittedInCatalogCurrency, 74);
+    assert.equal(result.conversion.from, 'EUR');
+    assert.equal(result.conversion.to, 'USD');
   });
 });

@@ -12,6 +12,7 @@ The core design rule is **LLM extracts; code decides**. Claude handles messy, se
 - Extracts PO metadata and line items with Anthropic tool use and a forced JSON schema.
 - Validates the model response with Zod before using it.
 - Checks SKU, quantity, unit price, line totals, and stated PO total against a small supplier catalog.
+- Supports orders in a different currency from the catalog and converts order prices before comparison.
 - Shows a review-ready result and generates a copyable confirmation.
 - Does not store uploaded documents or place orders automatically.
 
@@ -76,6 +77,8 @@ The demo catalog is intentionally small and lives in `apps/api/src/domain/catalo
 
 The analysis result contains the extracted PO, verified lines, discrepancies, totals, status, model used, and confirmation draft.
 
+When the order currency differs from the catalog currency, the API retrieves a daily reference rate from [Frankfurter](https://frankfurter.dev/), using the PO date when one was extracted and the latest rate otherwise. It converts PO prices into the catalog currency and returns the rate, date, original amounts, and converted amounts in the analysis result. Rates are cached for one hour. Frankfurter requires no API key.
+
 ## Deploy to Render
 
 1. Push this repository to GitHub.
@@ -91,6 +94,7 @@ The analysis result contains the extracted PO, verified lines, discrepancies, to
 - **Claude receives PDFs directly.** This preserves tables and layout without adding OCR/PDF parsing infrastructure. The tradeoff is provider coupling for PDF intake.
 - **Catalog extraction is review-first.** Claude can turn an irregular price list or image into editable rows, but the user must save that catalog before it becomes the deterministic comparison source.
 - **Deterministic verification.** The model never sees the approved catalog and cannot approve an order. Business rules are testable, explainable, and safe to change independently.
+- **Currency conversion before comparison.** PO amounts remain in their source currency for auditability. A daily reference rate creates separate catalog-currency values; only those converted values are compared with catalog prices. Reference rates are suitable for this prototype, not settlement or accounting.
 - **No database.** The weekend scope is intake and verification, not order lifecycle management. Results are intentionally ephemeral; production would store an audit record and document hash.
 - **Browser-local custom catalog.** Imported price lists are kept in `localStorage` for convenience and sent with each analysis. This avoids server-side persistence in the prototype, but production would use authenticated, versioned supplier contracts.
 - **One deployable service.** The monorepo still separates UI, API, and contracts, while a single container keeps deployment and demo reliability simple.

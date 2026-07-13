@@ -7,6 +7,7 @@ import {
   type ExtractedPurchaseOrder
 } from '@po/shared';
 import { catalog } from './catalog.js';
+import type { CurrencyConversion } from '../services/exchange-rate.service.js';
 
 const MONEY_TOLERANCE = 0.01;
 
@@ -15,10 +16,18 @@ const money = (value: number): number => Math.round((value + Number.EPSILON) * 1
 export function verifyPurchaseOrder(
   extracted: ExtractedPurchaseOrder,
   modelUsed: string,
-  priceList: readonly CatalogItem[] = catalog
+  priceList: readonly CatalogItem[] = catalog,
+  conversion: CurrencyConversion = {
+    from: extracted.currency,
+    to: priceList[0]?.currency ?? extracted.currency,
+    rate: 1,
+    date: null,
+    source: 'identity'
+  }
 ): AnalysisResponse {
   const discrepancies: Discrepancy[] = [];
   const catalogBySku = new Map(priceList.map(item => [item.sku.trim().toUpperCase(), item]));
+  const catalogCurrency = conversion.to;
 
   const lines = extracted.items.map(item => {
     const sku = item.sku.trim().toUpperCase();
@@ -43,6 +52,8 @@ export function verifyPurchaseOrder(
       });
     }
 
+    const convertedUnitPrice = item.unitPrice === null ? null : money(item.unitPrice * conversion.rate);
+
     if (item.unitPrice === null) {
       discrepancies.push({
         code: 'MISSING_PRICE',
@@ -51,14 +62,16 @@ export function verifyPurchaseOrder(
         expected: catalogItem?.unitPrice,
         message: `${sku} has no unit price in the purchase order.`
       });
-    } else if (catalogItem && Math.abs(item.unitPrice - catalogItem.unitPrice) > MONEY_TOLERANCE) {
+    } else if (catalogItem && convertedUnitPrice !== null && Math.abs(convertedUnitPrice - catalogItem.unitPrice) > MONEY_TOLERANCE) {
       discrepancies.push({
         code: 'PRICE_MISMATCH',
         severity: 'error',
         sku,
         expected: catalogItem.unitPrice,
-        received: item.unitPrice,
-        message: `${sku} is priced at $${item.unitPrice.toFixed(2)}; the catalog price is $${catalogItem.unitPrice.toFixed(2)}.`
+        received: convertedUnitPrice,
+        message: conversion.rate === 1
+          ? `${sku} is priced at ${item.unitPrice.toFixed(2)} ${catalogCurrency}; the catalog price is ${catalogItem.unitPrice.toFixed(2)} ${catalogCurrency}.`
+          : `${sku} is priced at ${item.unitPrice.toFixed(2)} ${conversion.from} (${convertedUnitPrice.toFixed(2)} ${catalogCurrency} after conversion); the catalog price is ${catalogItem.unitPrice.toFixed(2)} ${catalogCurrency}.`
       });
     }
 
@@ -72,6 +85,7 @@ export function verifyPurchaseOrder(
       sku,
       catalogDescription: catalogItem?.description ?? null,
       catalogUnitPrice: catalogItem?.unitPrice ?? null,
+      convertedUnitPrice,
       expectedLineTotal,
       status: hasLineIssue ? 'review' as const : 'matched' as const
     };
@@ -83,6 +97,7 @@ export function verifyPurchaseOrder(
     return sum;
   }, 0));
   const catalogTotal = money(lines.reduce((sum, line) => sum + (line.expectedLineTotal ?? 0), 0));
+  const submittedInCatalogCurrency = money(submittedTotal * conversion.rate);
 
   if (extracted.statedTotal !== null && Math.abs(extracted.statedTotal - submittedTotal) > MONEY_TOLERANCE) {
     discrepancies.push({
@@ -98,7 +113,7 @@ export function verifyPurchaseOrder(
   const poLabel = extracted.poNumber ?? 'Unnumbered PO';
   const supplierLabel = extracted.supplierName ?? 'the supplier';
   const confirmation = status === 'confirmed'
-    ? `${poLabel} from ${supplierLabel} is confirmed. ${lines.length} line item${lines.length === 1 ? '' : 's'} verified against the catalog for $${catalogTotal.toFixed(2)} ${extracted.currency}.`
+    ? `${poLabel} from ${supplierLabel} is confirmed. ${lines.length} line item${lines.length === 1 ? '' : 's'} verified against the catalog for ${catalogTotal.toFixed(2)} ${catalogCurrency}.`
     : `${poLabel} from ${supplierLabel} requires review. ${discrepancies.length} discrepanc${discrepancies.length === 1 ? 'y was' : 'ies were'} found before confirmation.`;
 
   return analysisResponseSchema.parse({
@@ -107,7 +122,8 @@ export function verifyPurchaseOrder(
     extracted,
     lines,
     discrepancies,
-    totals: { stated: extracted.statedTotal, submitted: submittedTotal, catalog: catalogTotal },
+    totals: { stated: extracted.statedTotal, submitted: submittedTotal, submittedInCatalogCurrency, catalog: catalogTotal },
+    conversion,
     confirmation,
     modelUsed
   });

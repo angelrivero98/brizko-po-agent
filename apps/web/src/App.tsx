@@ -448,6 +448,7 @@ function parseCsv(contents: string): string[][] {
 
 function Results({ result, onReset }: { result: AnalysisResponse; onReset: () => void }) {
   const isConfirmed = result.status === 'confirmed';
+  const converted = result.conversion.from !== result.conversion.to;
   const [copied, setCopied] = useState(false);
   const copyConfirmation = async () => {
     await navigator.clipboard.writeText(result.confirmation);
@@ -463,11 +464,21 @@ function Results({ result, onReset }: { result: AnalysisResponse; onReset: () =>
         <div className="model-badge">Processed by {result.modelUsed.replace('claude-', 'Claude ')}</div>
       </div>
 
+      {converted && (
+        <div className="conversion-banner">
+          <div><span className="conversion-mark">FX</span><strong>{result.conversion.from} → {result.conversion.to}</strong></div>
+          <p>1 {result.conversion.from} = {result.conversion.rate.toFixed(6)} {result.conversion.to}</p>
+          <span>Reference rate · {result.conversion.date ?? 'latest available'}</span>
+        </div>
+      )}
+
       <div className="summary-grid">
         <div><span>PO number</span><strong>{result.extracted.poNumber ?? 'Not found'}</strong></div>
         <div><span>Supplier</span><strong>{result.extracted.supplierName ?? 'Not found'}</strong></div>
         <div><span>Order date</span><strong>{result.extracted.orderDate ?? 'Not found'}</strong></div>
-        <div><span>Catalog total</span><strong>{money(result.totals.catalog, result.extracted.currency)}</strong></div>
+        <div><span>PO total</span><strong>{money(result.totals.stated ?? result.totals.submitted, result.conversion.from)}</strong></div>
+        <div><span>Converted PO</span><strong>{money(result.totals.submittedInCatalogCurrency, result.conversion.to)}</strong></div>
+        <div><span>Catalog total</span><strong>{money(result.totals.catalog, result.conversion.to)}</strong></div>
       </div>
 
       {result.discrepancies.length > 0 && (
@@ -481,8 +492,8 @@ function Results({ result, onReset }: { result: AnalysisResponse; onReset: () =>
 
       <div className="lines-card">
         <div className="section-title"><div><span className="step">03</span><h2>Verified line items</h2></div><span>{result.lines.length} items</span></div>
-        <div className="table-wrap"><table><thead><tr><th>SKU / description</th><th>Qty</th><th>PO price</th><th>Catalog</th><th>Expected total</th><th>Status</th></tr></thead>
-          <tbody>{result.lines.map((line, index) => <tr key={`${line.sku}-${index}`}><td><code>{line.sku}</code><small>{line.catalogDescription ?? line.description}</small></td><td>{line.quantity}</td><td>{money(line.unitPrice, result.extracted.currency)}</td><td>{money(line.catalogUnitPrice, result.extracted.currency)}</td><td>{money(line.expectedLineTotal, result.extracted.currency)}</td><td><span className={`status-pill ${line.status}`}>{line.status === 'matched' ? <Check size={13} /> : <CircleAlert size={13} />}{line.status}</span></td></tr>)}</tbody>
+        <div className="table-wrap"><table><thead><tr><th>SKU / description</th><th>Qty</th><th>PO price</th>{converted && <th>Converted</th>}<th>Catalog</th><th>Expected total</th><th>Status</th></tr></thead>
+          <tbody>{result.lines.map((line, index) => <tr key={`${line.sku}-${index}`}><td><code>{line.sku}</code><small>{line.catalogDescription ?? line.description}</small></td><td>{line.quantity}</td><td>{money(line.unitPrice, result.conversion.from)}</td>{converted && <td className="converted-price">{money(line.convertedUnitPrice, result.conversion.to)}</td>}<td>{money(line.catalogUnitPrice, result.conversion.to)}</td><td>{money(line.expectedLineTotal, result.conversion.to)}</td><td><span className={`status-pill ${line.status}`}>{line.status === 'matched' ? <Check size={13} /> : <CircleAlert size={13} />}{line.status}</span></td></tr>)}</tbody>
         </table></div>
       </div>
 

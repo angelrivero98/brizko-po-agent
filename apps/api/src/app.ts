@@ -9,6 +9,7 @@ import { catalog, supplier } from './domain/catalog.js';
 import { verifyPurchaseOrder } from './domain/verify-purchase-order.js';
 import { AnthropicCatalogExtractor, type CatalogSource } from './services/anthropic-catalog-extractor.js';
 import { AnthropicExtractor } from './services/anthropic-extractor.js';
+import { getCurrencyConversion } from './services/exchange-rate.service.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES } });
@@ -105,7 +106,10 @@ export function createApp() {
 
       const extractor = new AnthropicExtractor();
       const { purchaseOrder, modelUsed } = await extractor.extract(source);
-      res.json(verifyPurchaseOrder(purchaseOrder, modelUsed, customCatalog?.items ?? catalog));
+      const activeCatalog = customCatalog?.items ?? catalog;
+      const catalogCurrency = customCatalog?.currency ?? supplier.currency;
+      const conversion = await getCurrencyConversion(purchaseOrder.currency, catalogCurrency, purchaseOrder.orderDate);
+      res.json(verifyPurchaseOrder(purchaseOrder, modelUsed, activeCatalog, conversion));
     } catch (error) {
       next(error);
     }
@@ -133,7 +137,7 @@ export function createApp() {
       return;
     }
     const message = error instanceof Error ? error.message : 'Unexpected error.';
-    const status = message.includes('ANTHROPIC_API_KEY') ? 503 : 500;
+    const status = message.includes('ANTHROPIC_API_KEY') ? 503 : message.startsWith('Currency conversion') ? 422 : 500;
     res.status(status).json({ error: status === 503 ? 'AI analysis is not configured on this deployment.' : message });
   };
   app.use(errorHandler);

@@ -44,6 +44,7 @@ export const discrepancySchema = z.object({
 export const verifiedLineSchema = purchaseOrderItemSchema.extend({
   catalogDescription: z.string().nullable(),
   catalogUnitPrice: z.number().nullable(),
+  convertedUnitPrice: z.number().nullable(),
   expectedLineTotal: z.number().nullable(),
   status: z.enum(['matched', 'review'])
 });
@@ -57,7 +58,15 @@ export const analysisResponseSchema = z.object({
   totals: z.object({
     stated: z.number().nullable(),
     submitted: z.number(),
+    submittedInCatalogCurrency: z.number(),
     catalog: z.number()
+  }),
+  conversion: z.object({
+    from: z.string().length(3),
+    to: z.string().length(3),
+    rate: z.number().positive(),
+    date: z.string().nullable(),
+    source: z.enum(['identity', 'frankfurter'])
   }),
   confirmation: z.string(),
   modelUsed: z.string()
