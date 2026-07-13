@@ -1,12 +1,15 @@
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import {
   ArrowRight, Check, CheckCircle2, ChevronDown, CircleAlert, Clipboard,
-  FileText, LoaderCircle, PackageCheck, RotateCcw, ShieldCheck, Upload, X
+  FileText, LoaderCircle, PackageCheck, Pencil, Plus, RotateCcw, ShieldCheck,
+  Trash2, Upload, X
 } from 'lucide-react';
-import type { AnalysisResponse } from '@po/shared';
+import { supplierCatalogSchema, type AnalysisResponse, type CatalogItem } from '@po/shared';
 
-type CatalogItem = { sku: string; description: string; unitPrice: number; currency: string };
-type CatalogResponse = { supplier: { name: string }; items: CatalogItem[] };
+type CatalogResponse = { supplier: { name: string; currency: string }; items: CatalogItem[] };
+type EditableCatalog = { name: string; currency: string; items: CatalogItem[] };
+
+const CATALOG_STORAGE_KEY = 'po-guard-catalog-v1';
 
 const CLEAN_SAMPLE = `PURCHASE ORDER PO-1042
 Date: July 12, 2026
@@ -49,6 +52,24 @@ export function App() {
   const [catalogOpen, setCatalogOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const load = async () => {
+      const stored = localStorage.getItem(CATALOG_STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = supplierCatalogSchema.safeParse(JSON.parse(stored));
+          if (parsed.success) {
+            setCatalog({ supplier: { name: parsed.data.name, currency: parsed.data.currency }, items: parsed.data.items });
+            return;
+          }
+        } catch { /* Fall back to the demo catalog. */ }
+      }
+      const response = await fetch('/api/catalog');
+      setCatalog(await response.json() as CatalogResponse);
+    };
+    void load();
+  }, []);
+
   const chooseFile = (nextFile?: File) => {
     if (!nextFile) return;
     setFile(nextFile);
@@ -77,6 +98,13 @@ export function App() {
       const body = new FormData();
       if (file) body.append('file', file);
       else body.append('text', text);
+      if (catalog) {
+        body.append('catalog', JSON.stringify({
+          name: catalog.supplier.name,
+          currency: catalog.supplier.currency,
+          items: catalog.items
+        }));
+      }
       const response = await fetch('/api/analyze', { method: 'POST', body });
       const payload = await response.json() as AnalysisResponse | { error?: string };
       if (!response.ok) throw new Error('error' in payload ? payload.error : 'The PO could not be analyzed.');
@@ -93,6 +121,19 @@ export function App() {
     if (fileInput.current) fileInput.current.value = '';
   };
 
+  const saveCatalog = (nextCatalog: EditableCatalog) => {
+    const parsed = supplierCatalogSchema.parse(nextCatalog);
+    localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(parsed));
+    setCatalog({ supplier: { name: parsed.name, currency: parsed.currency }, items: parsed.items });
+    setCatalogOpen(false);
+  };
+
+  const restoreDefaultCatalog = async () => {
+    localStorage.removeItem(CATALOG_STORAGE_KEY);
+    const response = await fetch('/api/catalog');
+    setCatalog(await response.json() as CatalogResponse);
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -100,7 +141,7 @@ export function App() {
           <span className="brand-mark"><PackageCheck size={19} strokeWidth={2.4} /></span>
           <span>PO Guard</span>
         </a>
-        <div className="environment"><span /> Live catalog · 6 SKUs</div>
+        <button className="environment" onClick={loadCatalog}><span /> {catalog ? `${catalog.supplier.name} · ${catalog.items.length} SKUs` : 'Loading catalog…'} <Pencil size={12} /></button>
       </header>
 
       <main>
@@ -119,14 +160,16 @@ export function App() {
             <div className="intake-card">
               <div className="card-heading">
                 <div><span className="step">01</span><h2>Incoming purchase order</h2></div>
-                <button className="catalog-link" onClick={loadCatalog}>View price list <ChevronDown size={15} /></button>
+                <button className="catalog-link" onClick={loadCatalog}>Edit price list <ChevronDown size={15} /></button>
               </div>
 
               {catalogOpen && catalog && (
-                <div className="catalog-panel">
-                  <div className="catalog-title"><strong>{catalog.supplier.name}</strong><button onClick={() => setCatalogOpen(false)} aria-label="Close catalog"><X size={16} /></button></div>
-                  {catalog.items.map(item => <div className="catalog-row" key={item.sku}><code>{item.sku}</code><span>{item.description}</span><b>{money(item.unitPrice)}</b></div>)}
-                </div>
+                <CatalogEditor
+                  catalog={{ name: catalog.supplier.name, currency: catalog.supplier.currency, items: catalog.items }}
+                  onClose={() => setCatalogOpen(false)}
+                  onSave={saveCatalog}
+                  onRestoreDefault={restoreDefaultCatalog}
+                />
               )}
 
               <div
@@ -161,6 +204,204 @@ export function App() {
       <footer><span>PO Guard prototype</span><span>AI extracts · Rules verify · Humans decide</span></footer>
     </div>
   );
+}
+
+function CatalogEditor({
+  catalog,
+  onClose,
+  onSave,
+  onRestoreDefault
+}: {
+  catalog: EditableCatalog;
+  onClose: () => void;
+  onSave: (catalog: EditableCatalog) => void;
+  onRestoreDefault: () => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<EditableCatalog>(() => ({
+    ...catalog,
+    items: catalog.items.map(item => ({ ...item }))
+  }));
+  const [editorError, setEditorError] = useState('');
+  const catalogFileInput = useRef<HTMLInputElement>(null);
+
+  const updateItem = (index: number, changes: Partial<CatalogItem>) => {
+    setDraft(current => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item)
+    }));
+  };
+
+  const updateCurrency = (currency: string) => {
+    const normalized = currency.toUpperCase().slice(0, 3);
+    setDraft(current => ({
+      ...current,
+      currency: normalized,
+      items: current.items.map(item => ({ ...item, currency: normalized }))
+    }));
+  };
+
+  const importCatalog = async (inputFile?: File) => {
+    if (!inputFile) return;
+    setEditorError('');
+    try {
+      const contents = await inputFile.text();
+      let imported: EditableCatalog;
+      if (inputFile.name.toLowerCase().endsWith('.json')) {
+        const value = JSON.parse(contents) as unknown;
+        const record = !Array.isArray(value) && typeof value === 'object' && value !== null
+          ? value as Record<string, unknown>
+          : null;
+        const rawItems = Array.isArray(value) ? value : record?.items;
+        if (!Array.isArray(rawItems)) throw new Error('JSON must be an item array or an object with an items array.');
+        const currency = typeof record?.currency === 'string' ? record.currency : draft.currency;
+        const items = rawItems.map(rawItem => {
+          const item = typeof rawItem === 'object' && rawItem !== null ? rawItem as Record<string, unknown> : {};
+          return {
+            sku: String(item.sku ?? '').trim().toUpperCase(),
+            description: String(item.description ?? item.descripcion ?? '').trim(),
+            unitPrice: Number(item.unitPrice ?? item.unit_price ?? item.price ?? item.precio),
+            currency: String(item.currency ?? item.moneda ?? currency).trim().toUpperCase()
+          };
+        });
+        const parsed = supplierCatalogSchema.parse({
+          name: typeof record?.name === 'string' ? record.name : inputFile.name.replace(/\.json$/i, ''),
+          currency,
+          items
+        });
+        imported = parsed;
+      } else {
+        const rows = parseCsv(contents);
+        if (rows.length < 2) throw new Error('The CSV needs a header and at least one item.');
+        const headers = rows[0]!.map(header => header.trim().toLowerCase().replace(/[\s_-]/g, ''));
+        const findHeader = (...names: string[]) => headers.findIndex(header => names.includes(header));
+        const skuIndex = findHeader('sku', 'itemsku', 'codigo', 'código');
+        const descriptionIndex = findHeader('description', 'descripcion', 'descripción', 'item');
+        const priceIndex = findHeader('unitprice', 'price', 'precio', 'preciounitario');
+        const currencyIndex = findHeader('currency', 'moneda');
+        if (skuIndex < 0 || descriptionIndex < 0 || priceIndex < 0) {
+          throw new Error('CSV columns required: sku, description, unitPrice. Currency is optional.');
+        }
+        const items = rows.slice(1).filter(row => row.some(Boolean)).map(row => ({
+          sku: (row[skuIndex] ?? '').trim().toUpperCase(),
+          description: (row[descriptionIndex] ?? '').trim(),
+          unitPrice: Number((row[priceIndex] ?? '').replace(/[$,]/g, '')),
+          currency: (currencyIndex >= 0 ? row[currencyIndex] : draft.currency)?.trim().toUpperCase() || draft.currency
+        }));
+        const currency = items[0]?.currency ?? draft.currency;
+        imported = supplierCatalogSchema.parse({
+          name: inputFile.name.replace(/\.csv$/i, ''),
+          currency,
+          items
+        });
+      }
+      setDraft(imported);
+    } catch (cause) {
+      setEditorError(cause instanceof Error ? cause.message : 'The catalog could not be imported.');
+    } finally {
+      if (catalogFileInput.current) catalogFileInput.current.value = '';
+    }
+  };
+
+  const save = () => {
+    setEditorError('');
+    const normalized = {
+      ...draft,
+      name: draft.name.trim(),
+      currency: draft.currency.trim().toUpperCase(),
+      items: draft.items.map(item => ({
+        ...item,
+        sku: item.sku.trim().toUpperCase(),
+        description: item.description.trim(),
+        currency: draft.currency.trim().toUpperCase()
+      }))
+    };
+    const duplicateSkus = normalized.items
+      .map(item => item.sku)
+      .filter((sku, index, all) => all.indexOf(sku) !== index);
+    if (duplicateSkus.length) {
+      setEditorError(`Duplicate SKU: ${duplicateSkus[0]}`);
+      return;
+    }
+    const parsed = supplierCatalogSchema.safeParse(normalized);
+    if (!parsed.success) {
+      setEditorError('Complete the supplier name, 3-letter currency, SKU, description, and a valid non-negative price for every row.');
+      return;
+    }
+    onSave(parsed.data);
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+      <section className="catalog-modal" role="dialog" aria-modal="true" aria-labelledby="catalog-editor-title">
+        <div className="catalog-modal-header">
+          <div><span className="step">PRICE LIST</span><h2 id="catalog-editor-title">Catalog used for verification</h2><p>Import your own list or edit any item before analyzing a PO.</p></div>
+          <button className="icon-button" onClick={onClose} aria-label="Close catalog editor"><X size={18} /></button>
+        </div>
+
+        <div className="catalog-meta">
+          <label>Supplier name<input value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} /></label>
+          <label>Currency<input value={draft.currency} maxLength={3} onChange={event => updateCurrency(event.target.value)} /></label>
+          <div className="catalog-actions">
+            <input ref={catalogFileInput} type="file" accept=".csv,.json,text/csv,application/json" onChange={event => void importCatalog(event.target.files?.[0])} />
+            <button onClick={() => catalogFileInput.current?.click()}><Upload size={15} /> Import CSV / JSON</button>
+            <a href="/catalog-template.csv" download>CSV template</a>
+            <button onClick={() => setDraft(current => ({ ...current, items: [...current.items, { sku: '', description: '', unitPrice: 0, currency: current.currency }] }))}><Plus size={15} /> Add row</button>
+          </div>
+        </div>
+
+        <div className="catalog-edit-table-wrap">
+          <table className="catalog-edit-table">
+            <thead><tr><th>SKU</th><th>Description</th><th>Unit price</th><th aria-label="Actions" /></tr></thead>
+            <tbody>{draft.items.map((item, index) => (
+              <tr key={`${index}-${item.sku}`}>
+                <td><input aria-label={`SKU row ${index + 1}`} value={item.sku} onChange={event => updateItem(index, { sku: event.target.value })} /></td>
+                <td><input aria-label={`Description row ${index + 1}`} value={item.description} onChange={event => updateItem(index, { description: event.target.value })} /></td>
+                <td><div className="price-input"><span>{draft.currency || '—'}</span><input aria-label={`Unit price row ${index + 1}`} type="number" min="0" step="0.01" value={Number.isFinite(item.unitPrice) ? item.unitPrice : ''} onChange={event => updateItem(index, { unitPrice: event.target.value === '' ? Number.NaN : Number(event.target.value) })} /></div></td>
+                <td><button className="delete-row" disabled={draft.items.length === 1} onClick={() => setDraft(current => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) }))} aria-label={`Delete row ${index + 1}`}><Trash2 size={15} /></button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+
+        {editorError && <div className="error-banner catalog-error"><CircleAlert size={17} />{editorError}</div>}
+        <div className="catalog-modal-footer">
+          <button className="reset-catalog" onClick={() => void onRestoreDefault().then(onClose)}><RotateCcw size={14} /> Restore demo catalog</button>
+          <div><button className="secondary-button" onClick={onClose}>Cancel</button><button className="save-catalog" onClick={save}>Use this catalog <Check size={15} /></button></div>
+        </div>
+        <p className="catalog-storage-note">Saved only in this browser. The selected catalog is sent with the PO for comparison and is not stored by the server.</p>
+      </section>
+    </div>
+  );
+}
+
+function parseCsv(contents: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+
+  for (let index = 0; index < contents.length; index++) {
+    const char = contents[index]!;
+    const next = contents[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      field += '"';
+      index++;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      row.push(field); field = '';
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && next === '\n') index++;
+      row.push(field); field = '';
+      if (row.some(value => value.trim())) rows.push(row);
+      row = [];
+    } else {
+      field += char;
+    }
+  }
+  row.push(field);
+  if (row.some(value => value.trim())) rows.push(row);
+  return rows;
 }
 
 function Results({ result, onReset }: { result: AnalysisResponse; onReset: () => void }) {

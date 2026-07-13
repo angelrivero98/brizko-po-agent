@@ -1,9 +1,4 @@
-export type CatalogItem = {
-  sku: string;
-  description: string;
-  unitPrice: number;
-  currency: 'USD';
-};
+import type { CatalogItem } from '@po/shared';
 
 export const supplier = {
   id: 'northstar-industrial',
@@ -19,5 +14,3 @@ export const catalog: readonly CatalogItem[] = [
   { sku: 'WRAP-STRETCH', description: 'Industrial stretch wrap, 18 in × 1500 ft', unitPrice: 16.25, currency: 'USD' },
   { sku: 'LABEL-THERM-4X6', description: '4 × 6 in direct thermal labels, roll of 500', unitPrice: 14.4, currency: 'USD' }
 ];
-
-export const catalogBySku = new Map(catalog.map(item => [item.sku, item]));

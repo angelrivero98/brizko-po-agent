@@ -7,6 +7,7 @@ The core design rule is **LLM extracts; code decides**. Claude handles messy, se
 ## What it does
 
 - Accepts pasted text, email content, PDF, TXT, or EML files (up to 10 MB).
+- Lets a reviewer import a CSV/JSON supplier catalog, edit its rows, and reuse it from browser storage.
 - Extracts PO metadata and line items with Anthropic tool use and a forced JSON schema.
 - Validates the model response with Zod before using it.
 - Checks SKU, quantity, unit price, line totals, and stated PO total against a small supplier catalog.
@@ -69,7 +70,7 @@ The demo catalog is intentionally small and lives in `apps/api/src/domain/catalo
 
 - `GET /api/health` — service and AI configuration status.
 - `GET /api/catalog` — demo supplier and price list.
-- `POST /api/analyze` — multipart body with either `text` or `file`.
+- `POST /api/analyze` — multipart body with either `text` or `file`; it optionally accepts a `catalog` JSON field containing the supplier name, currency, and items to use for that comparison.
 
 The analysis result contains the extracted PO, verified lines, discrepancies, totals, status, model used, and confirmation draft.
 
@@ -88,6 +89,7 @@ The analysis result contains the extracted PO, verified lines, discrepancies, to
 - **Claude receives PDFs directly.** This preserves tables and layout without adding OCR/PDF parsing infrastructure. The tradeoff is provider coupling for PDF intake.
 - **Deterministic verification.** The model never sees the approved catalog and cannot approve an order. Business rules are testable, explainable, and safe to change independently.
 - **No database.** The weekend scope is intake and verification, not order lifecycle management. Results are intentionally ephemeral; production would store an audit record and document hash.
+- **Browser-local custom catalog.** Imported price lists are kept in `localStorage` for convenience and sent with each analysis. This avoids server-side persistence in the prototype, but production would use authenticated, versioned supplier contracts.
 - **One deployable service.** The monorepo still separates UI, API, and contracts, while a single container keeps deployment and demo reliability simple.
 - **Human in the loop.** PO Guard drafts a result but does not transmit a supplier confirmation or create an ERP order. Those are natural next actions after authentication, roles, and audit history exist.
 

@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+export const catalogItemSchema = z.object({
+  sku: z.string().trim().min(1).max(100),
+  description: z.string().trim().min(1).max(500),
+  unitPrice: z.number().nonnegative(),
+  currency: z.string().trim().length(3).transform(value => value.toUpperCase())
+});
+
+export const supplierCatalogSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  currency: z.string().trim().length(3).transform(value => value.toUpperCase()),
+  items: z.array(catalogItemSchema).min(1).max(500)
+});
+
 export const purchaseOrderItemSchema = z.object({
   sku: z.string().min(1),
   description: z.string().default(''),
@@ -53,3 +66,5 @@ export const analysisResponseSchema = z.object({
 export type ExtractedPurchaseOrder = z.infer<typeof extractedPurchaseOrderSchema>;
 export type AnalysisResponse = z.infer<typeof analysisResponseSchema>;
 export type Discrepancy = z.infer<typeof discrepancySchema>;
+export type CatalogItem = z.infer<typeof catalogItemSchema>;
+export type SupplierCatalog = z.infer<typeof supplierCatalogSchema>;

@@ -48,4 +48,15 @@ describe('verifyPurchaseOrder', () => {
     }, 'test-model');
     assert.equal(result.discrepancies[0]?.code, 'INVALID_QUANTITY');
   });
+
+  it('uses a caller-provided catalog for comparison', () => {
+    const result = verifyPurchaseOrder(baseOrder, 'test-model', [
+      { sku: 'BOLT-M8-50', description: 'Contract bolts', unitPrice: 20, currency: 'USD' },
+      { sku: 'GLV-NIT-M', description: 'Contract gloves', unitPrice: 12.75, currency: 'USD' }
+    ]);
+
+    assert.equal(result.status, 'review_required');
+    assert.equal(result.discrepancies[0]?.code, 'PRICE_MISMATCH');
+    assert.equal(result.discrepancies[0]?.expected, 20);
+  });
 });

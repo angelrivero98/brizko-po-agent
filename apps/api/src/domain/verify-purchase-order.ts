@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import {
   analysisResponseSchema,
   type AnalysisResponse,
+  type CatalogItem,
   type Discrepancy,
   type ExtractedPurchaseOrder
 } from '@po/shared';
-import { catalogBySku } from './catalog.js';
+import { catalog } from './catalog.js';
 
 const MONEY_TOLERANCE = 0.01;
 
@@ -13,9 +14,11 @@ const money = (value: number): number => Math.round((value + Number.EPSILON) * 1
 
 export function verifyPurchaseOrder(
   extracted: ExtractedPurchaseOrder,
-  modelUsed: string
+  modelUsed: string,
+  priceList: readonly CatalogItem[] = catalog
 ): AnalysisResponse {
   const discrepancies: Discrepancy[] = [];
+  const catalogBySku = new Map(priceList.map(item => [item.sku.trim().toUpperCase(), item]));
 
   const lines = extracted.items.map(item => {
     const sku = item.sku.trim().toUpperCase();

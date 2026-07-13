@@ -4,6 +4,7 @@ import express, { type ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { ZodError } from 'zod';
+import { supplierCatalogSchema } from '@po/shared';
 import { catalog, supplier } from './domain/catalog.js';
 import { verifyPurchaseOrder } from './domain/verify-purchase-order.js';
 import { AnthropicExtractor } from './services/anthropic-extractor.js';
@@ -30,6 +31,21 @@ export function createApp() {
       const pastedText = typeof req.body.text === 'string' ? req.body.text.trim() : '';
       const file = req.file;
 
+      let customCatalog = null;
+      if (typeof req.body.catalog === 'string' && req.body.catalog.trim()) {
+        try {
+          const parsedCatalog = supplierCatalogSchema.safeParse(JSON.parse(req.body.catalog));
+          if (!parsedCatalog.success) {
+            res.status(400).json({ error: 'The custom catalog is invalid.' });
+            return;
+          }
+          customCatalog = parsedCatalog.data;
+        } catch {
+          res.status(400).json({ error: 'The custom catalog must be valid JSON.' });
+          return;
+        }
+      }
+
       if (!pastedText && !file) {
         res.status(400).json({ error: 'Paste purchase-order text or attach a PDF, TXT, or EML file.' });
         return;
@@ -53,7 +69,7 @@ export function createApp() {
 
       const extractor = new AnthropicExtractor();
       const { purchaseOrder, modelUsed } = await extractor.extract(source);
-      res.json(verifyPurchaseOrder(purchaseOrder, modelUsed));
+      res.json(verifyPurchaseOrder(purchaseOrder, modelUsed, customCatalog?.items ?? catalog));
     } catch (error) {
       next(error);
     }
