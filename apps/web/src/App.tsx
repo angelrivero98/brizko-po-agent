@@ -64,6 +64,22 @@ const money = (value: number | null, currency = 'USD') => value === null
 
 const formatModelName = (model: string) => model.replace(/^gpt-/i, 'GPT ');
 
+async function readApiResponse<T extends object>(response: Response): Promise<T & { error?: string }> {
+  const raw = await response.text();
+  if (raw) {
+    try {
+      return JSON.parse(raw) as T & { error?: string };
+    } catch {
+      // A proxy or hosting error may return plain text instead of the API JSON contract.
+    }
+  }
+  return {
+    error: response.ok
+      ? 'The server returned an invalid response. Please try again.'
+      : `The analysis service returned an unexpected response (${response.status}). Please try again.`
+  } as T & { error: string };
+}
+
 export function App() {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -144,9 +160,9 @@ export function App() {
           }));
         }
         const response = await fetch('/api/analyze', { method: 'POST', body });
-        const payload = await response.json() as AnalysisResponse | { error?: string };
-        if (!response.ok) throw new Error('error' in payload ? payload.error : 'The PO could not be analyzed.');
-        return payload as AnalysisResponse;
+        const payload = await readApiResponse<AnalysisResponse>(response);
+        if (!response.ok || payload.error) throw new Error(payload.error ?? 'The PO could not be analyzed.');
+        return payload;
       }));
 
       const nextAnalyses: BatchAnalysis[] = settled.map((outcome, index) => ({
@@ -381,12 +397,12 @@ function CatalogEditor({
       const body = new FormData();
       body.append('file', inputFile);
       const response = await fetch('/api/catalog/extract', { method: 'POST', body });
-      const payload = await response.json() as {
+      const payload = await readApiResponse<{
         catalog?: EditableCatalog;
         warnings?: string[];
         modelUsed?: string;
         error?: string;
-      };
+      }>(response);
       if (!response.ok || !payload.catalog) {
         throw new Error(payload.error ?? 'The AI could not extract this catalog.');
       }

@@ -3,6 +3,7 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import type { ResponseInputContent } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import { supplierCatalogSchema, type SupplierCatalog } from '@po/shared';
+import { toPdfDataUrl } from './file-input.js';
 
 export type CatalogSource =
   | { kind: 'text'; text: string }
@@ -47,7 +48,7 @@ export class OpenAICatalogExtractor {
   async extract(source: CatalogSource): Promise<{ catalog: SupplierCatalog; warnings: string[]; modelUsed: string }> {
     const content: ResponseInputContent[] = source.kind === 'pdf'
       ? [
-          { type: 'input_file', filename: 'supplier-catalog.pdf', file_data: source.data, detail: 'high' },
+          { type: 'input_file', filename: 'supplier-catalog.pdf', file_data: toPdfDataUrl(source.data), detail: 'high' },
           { type: 'input_text', text: 'Extract this supplier catalog.' }
         ]
       : source.kind === 'image'

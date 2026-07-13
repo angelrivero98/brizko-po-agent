@@ -3,6 +3,7 @@ import { zodTextFormat } from 'openai/helpers/zod';
 import type { ResponseInputContent } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import { extractedPurchaseOrderSchema, type ExtractedPurchaseOrder } from '@po/shared';
+import { toPdfDataUrl } from './file-input.js';
 
 type PurchaseOrderInput =
   | { kind: 'text'; text: string }
@@ -51,7 +52,7 @@ export class OpenAIExtractor {
   async extract(input: PurchaseOrderInput): Promise<{ purchaseOrder: ExtractedPurchaseOrder; modelUsed: string }> {
     const content: ResponseInputContent[] = input.kind === 'pdf'
       ? [
-          { type: 'input_file', filename: 'incoming-purchase-order.pdf', file_data: input.data, detail: 'high' },
+          { type: 'input_file', filename: 'incoming-purchase-order.pdf', file_data: toPdfDataUrl(input.data), detail: 'high' },
           { type: 'input_text', text: 'Extract this purchase order.' }
         ]
       : [{ type: 'input_text', text: input.text }];
